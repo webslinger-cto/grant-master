@@ -1,0 +1,16 @@
+[build]
+  base = "apps/frontend"
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NPM_VERSION = "10"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Environment variables needed (set in Netlify dashboard):
+# NEXT_PUBLIC_API_URL = https://your-backend-url.onrender.com/api/v1
