@@ -4,8 +4,8 @@ services:
     runtime: node
     region: oregon
     plan: free
-    buildCommand: npm install && cd apps/backend && npm install && npm run build
-    startCommand: cd apps/backend && node dist/main.js
+    buildCommand: npm install && npm run build:backend
+    startCommand: ./start-backend.sh
     envVars:
       - key: NODE_ENV
         value: production
