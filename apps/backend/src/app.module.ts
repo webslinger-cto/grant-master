@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, DynamicModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { BullModule } from '@nestjs/bullmq';
@@ -20,7 +20,7 @@ import { DatabaseModule } from './database/database.module';
 import { EnrichmentModule } from './enrichment/enrichment.module';
 
 // Conditional imports based on environment
-const conditionalImports = [];
+const conditionalImports: DynamicModule[] = [];
 
 // Only include BullMQ if Redis URL is provided
 if (process.env.REDIS_URL) {
