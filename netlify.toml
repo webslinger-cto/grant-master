@@ -5,12 +5,9 @@
 
 [build.environment]
   NODE_VERSION = "20"
-  NPM_VERSION = "10"
 
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
 
 # Environment variables needed (set in Netlify dashboard):
-# NEXT_PUBLIC_API_URL = https://your-backend-url.onrender.com/api/v1
+# NEXT_PUBLIC_API_URL = https://grantsmaster.onrender.com/api/v1
