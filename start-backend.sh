@@ -15,4 +15,4 @@ echo "==> Checking if apps/backend/dist/main.js exists:"
 ls -la apps/backend/dist/ || echo "apps/backend/dist/ directory not found"
 
 echo "==> Attempting to start application..."
-cd apps/backend && node dist/main.js
+cd apps/backend && node dist/src/main.js
