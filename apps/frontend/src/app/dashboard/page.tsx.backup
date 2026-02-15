@@ -1,0 +1,248 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+
+interface Application {
+  id: string;
+  internal_name: string;
+  amount_requested: number;
+  current_stage: string;
+  probability: number;
+  submission_deadline: string;
+}
+
+interface Stats {
+  totalApplications: number;
+  totalRequested: number;
+  avgProbability: number;
+}
+
+export default function DashboardPage() {
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        // For now, we'll create mock data since the API endpoints aren't fully set up
+        // In production, you'd fetch from: `${process.env.NEXT_PUBLIC_API_URL}/applications`
+
+        const mockApplications: Application[] = [
+          {
+            id: '70000001-0000-0000-0000-000000000001',
+            internal_name: 'NIH R01 - CardioAI - Summer 2026',
+            amount_requested: 450000,
+            current_stage: 'drafting',
+            probability: 20.00,
+            submission_deadline: '2026-06-15',
+          },
+          {
+            id: '70000001-0000-0000-0000-000000000002',
+            internal_name: 'NIH SBIR - Remote Monitoring - Spring 2026',
+            amount_requested: 250000,
+            current_stage: 'planning',
+            probability: 25.00,
+            submission_deadline: '2026-05-01',
+          },
+        ];
+
+        setApplications(mockApplications);
+
+        const totalRequested = mockApplications.reduce((sum, app) => sum + app.amount_requested, 0);
+        const avgProbability = mockApplications.reduce((sum, app) => sum + app.probability, 0) / mockApplications.length;
+
+        setStats({
+          totalApplications: mockApplications.length,
+          totalRequested,
+          avgProbability,
+        });
+
+        setLoading(false);
+      } catch (err) {
+        setError('Failed to load dashboard data');
+        setLoading(false);
+      }
+    }
+
+    fetchData();
+  }, []);
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  };
+
+  const getStageColor = (stage: string) => {
+    const colors: Record<string, string> = {
+      qualification: 'bg-gray-100 text-gray-800',
+      planning: 'bg-blue-100 text-blue-800',
+      drafting: 'bg-yellow-100 text-yellow-800',
+      review: 'bg-purple-100 text-purple-800',
+      submitted: 'bg-green-100 text-green-800',
+    };
+    return colors[stage] || 'bg-gray-100 text-gray-800';
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-lg">Loading dashboard...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-red-500">{error}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">GrantOps</h1>
+              <p className="text-sm text-gray-500 mt-1">WebSlingerAI Grant Management</p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-500 mb-2">
+              Total Applications
+            </div>
+            <div className="text-3xl font-bold text-gray-900">
+              {stats?.totalApplications}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-500 mb-2">
+              Total Amount Requested
+            </div>
+            <div className="text-3xl font-bold text-gray-900">
+              {stats && formatCurrency(stats.totalRequested)}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-500 mb-2">
+              Average Win Probability
+            </div>
+            <div className="text-3xl font-bold text-gray-900">
+              {stats?.avgProbability.toFixed(0)}%
+            </div>
+          </div>
+        </div>
+
+        {/* Applications Table */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Active Applications
+            </h2>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Application Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Amount
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Stage
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Probability
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Deadline
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {applications.map((app) => (
+                  <tr key={app.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        {app.internal_name}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {formatCurrency(app.amount_requested)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStageColor(app.current_stage)}`}>
+                        {app.current_stage}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {app.probability}%
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(app.submission_deadline)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Info Note */}
+        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-blue-800">
+                Demo Data
+              </h3>
+              <div className="mt-2 text-sm text-blue-700">
+                <p>
+                  This dashboard is displaying seed data from your Supabase database.
+                  The data includes 2 applications from the WebSlingerAI organization.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
