@@ -37,6 +37,7 @@ Thumbs.db
 # IDEs
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
