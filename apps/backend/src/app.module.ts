@@ -19,6 +19,21 @@ import { PartnersModule } from './modules/partners/partners.module';
 import { DatabaseModule } from './database/database.module';
 import { EnrichmentModule } from './enrichment/enrichment.module';
 
+// Conditional imports based on environment
+const conditionalImports = [];
+
+// Only include BullMQ if Redis URL is provided
+if (process.env.REDIS_URL) {
+  conditionalImports.push(
+    BullModule.forRoot({
+      connection: {
+        host: process.env.REDIS_URL?.split('://')[1]?.split(':')[0] || 'localhost',
+        port: parseInt(process.env.REDIS_URL?.split(':')[2] || '6379'),
+      },
+    }),
+  );
+}
+
 @Module({
   imports: [
     // Configuration
@@ -34,13 +49,8 @@ import { EnrichmentModule } from './enrichment/enrichment.module';
       maxListeners: 10,
     }),
 
-    // Queue system
-    BullModule.forRoot({
-      connection: {
-        host: process.env.REDIS_URL?.split('://')[1]?.split(':')[0] || 'localhost',
-        port: parseInt(process.env.REDIS_URL?.split(':')[2] || '6379'),
-      },
-    }),
+    // Conditional imports (Redis/Queue system if available)
+    ...conditionalImports,
 
     // Database
     DatabaseModule,
