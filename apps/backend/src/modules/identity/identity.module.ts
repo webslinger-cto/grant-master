@@ -12,7 +12,7 @@ import { GoogleStrategy } from './auth/strategies/google.strategy';
 import { UsersController } from './users/users.controller';
 
 // Conditional providers based on environment
-const conditionalProviders = [AuthService, UsersService, RolesService, JwtStrategy];
+const conditionalProviders: any[] = [AuthService, UsersService, RolesService, JwtStrategy];
 
 // Only include Google OAuth if credentials are configured
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
