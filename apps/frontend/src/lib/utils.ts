@@ -32,10 +32,10 @@ export function calculateForecastValue(amountRequested: number, probability: num
 export function getStageColor(stage: string): string {
   const colors: Record<string, string> = {
     qualification: 'bg-gray-100 text-gray-800',
-    planning: 'bg-blue-100 text-blue-800',
+    planning: 'bg-gm-cyan-soft text-gm-navy',
     drafting: 'bg-yellow-100 text-yellow-800',
     review: 'bg-purple-100 text-purple-800',
-    submitted: 'bg-indigo-100 text-indigo-800',
+    submitted: 'bg-gm-cyan-soft text-gm-navy',
     awarded: 'bg-green-100 text-green-800',
     not_funded: 'bg-red-100 text-red-800',
     withdrawn: 'bg-gray-100 text-gray-800',
@@ -46,7 +46,7 @@ export function getStageColor(stage: string): string {
 export function getStatusColor(status: string): string {
   const colors: Record<string, string> = {
     not_started: 'bg-gray-100 text-gray-800',
-    in_progress: 'bg-blue-100 text-blue-800',
+    in_progress: 'bg-gm-cyan-soft text-gm-navy',
     blocked: 'bg-orange-100 text-orange-800',
     in_review: 'bg-purple-100 text-purple-800',
     complete: 'bg-green-100 text-green-800',

@@ -1,4 +1,4 @@
-# GrantOps Setup Guide
+# GrantsMaster Setup Guide
 
 ## Sprint 0 Foundation - Status: IN PROGRESS ✅
 
@@ -145,7 +145,7 @@ npm run dev
 
 # You should see:
 # ✅ Database connected successfully
-# 🚀 GrantOps Backend running on: http://localhost:3001/api/v1
+# 🚀 GrantsMaster Backend running on: http://localhost:3001/api/v1
 ```
 
 #### Test Seed Data
@@ -203,7 +203,7 @@ npm run db:migrate
 ### Architecture Overview
 
 ```
-grantops/
+grant_master/
 ├── apps/
 │   ├── backend/              # NestJS API (port 3001)
 │   │   ├── src/

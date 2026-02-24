@@ -4,36 +4,36 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 210 33% 98%;
+    --foreground: 224 55% 18%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 224 55% 18%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
+    --popover-foreground: 224 55% 18%;
+    --primary: 224 79% 20%;
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary-foreground: 224 47% 20%;
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
     --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent-foreground: 224 47% 20%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
+    --ring: 190 94% 43%;
     --radius: 0.5rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    --background: 223 56% 8%;
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    --card: 223 56% 8%;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
+    --popover: 223 56% 8%;
     --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
+    --primary: 190 94% 43%;
     --primary-foreground: 222.2 47.4% 11.2%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
@@ -45,7 +45,7 @@
     --destructive-foreground: 210 40% 98%;
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --ring: 190 94% 43%;
   }
 }
 
@@ -56,4 +56,86 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Scoped prose styles for rendered HTML from grants APIs */
+.grant-html-body {
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: #374151;
+}
+.grant-html-body p {
+  margin-bottom: 0.75rem;
+}
+.grant-html-body p:last-child {
+  margin-bottom: 0;
+}
+.grant-html-body h1,
+.grant-html-body h2,
+.grant-html-body h3,
+.grant-html-body h4 {
+  font-weight: 600;
+  color: #111827;
+  margin-top: 1rem;
+  margin-bottom: 0.375rem;
+}
+.grant-html-body h1 { font-size: 0.875rem; }
+.grant-html-body h2 { font-size: 0.8125rem; }
+.grant-html-body h3,
+.grant-html-body h4 { font-size: 0.75rem; }
+.grant-html-body ul,
+.grant-html-body ol {
+  padding-left: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+.grant-html-body ul { list-style-type: disc; }
+.grant-html-body ol { list-style-type: decimal; }
+.grant-html-body li {
+  margin-bottom: 0.25rem;
+}
+.grant-html-body a {
+  color: #0b1f5b;
+  text-decoration: underline;
+  word-break: break-all;
+}
+.grant-html-body a:hover {
+  color: #081742;
+}
+.grant-html-body strong,
+.grant-html-body b {
+  font-weight: 600;
+  color: #111827;
+}
+.grant-html-body em,
+.grant-html-body i {
+  font-style: italic;
+}
+.grant-html-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.7rem;
+  margin-bottom: 0.75rem;
+}
+.grant-html-body th,
+.grant-html-body td {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #e5e7eb;
+  text-align: left;
+}
+.grant-html-body th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+.grant-html-body hr {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 0.75rem 0;
+}
+.grant-html-body pre,
+.grant-html-body code {
+  font-family: monospace;
+  font-size: 0.7rem;
+  background: #f3f4f6;
+  padding: 0.125rem 0.25rem;
+  border-radius: 3px;
 }

@@ -40,7 +40,7 @@ async function bootstrap() {
   const port = configService.get('PORT') || 3001;
   await app.listen(port);
 
-  console.log(`🚀 GrantOps Backend running on: http://localhost:${port}/api/v1`);
+  console.log(`🚀 GrantsMaster Backend running on: http://localhost:${port}/api/v1`);
 }
 
 bootstrap();

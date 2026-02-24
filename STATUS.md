@@ -1,4 +1,4 @@
-# GrantOps - Current Implementation Status
+# GrantsMaster - Current Implementation Status
 
 **Last Updated:** February 14, 2026
 **Sprint:** 0 (Foundation)
@@ -8,7 +8,7 @@
 
 ## 📊 Summary
 
-GrantOps is an internal grant management platform for WebSlingerAI. This document tracks implementation progress against the full product blueprint.
+GrantsMaster is an internal grant management platform for WebSlingerAI. This document tracks implementation progress against the full product blueprint.
 
 ---
 

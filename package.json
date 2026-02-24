@@ -2,7 +2,7 @@
   "name": "grantops",
   "version": "1.0.0",
   "private": true,
-  "description": "GrantOps - Internal Grant Management Platform for WebSlingerAI",
+  "description": "GrantsMaster - Internal Grant Management Platform for WebSlingerAI",
   "workspaces": [
     "apps/*",
     "packages/*"

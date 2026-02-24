@@ -38,6 +38,10 @@ class ApiClient {
           } else {
             // Redirect to login
             this.clearTokens();
+            // Save current URL to return after login
+            if (typeof window !== 'undefined') {
+              sessionStorage.setItem('returnUrl', window.location.pathname + window.location.search);
+            }
             window.location.href = '/auth/login';
           }
         }

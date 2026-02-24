@@ -1,0 +1,11 @@
+<svg width="512" height="512" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>GrantsMaster icon</title>
+  <polygon points="120,16 205,65 205,175 120,224 35,175 35,65" fill="#0B1F5B"/>
+  <polyline points="64,160 98,124 124,124" stroke="#06B6D4" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="124,124 156,158" stroke="#A3E635" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="156,158 186,112" stroke="#EC4899" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="64" cy="160" r="11" fill="#06B6D4"/>
+  <circle cx="124" cy="124" r="11" fill="#A3E635"/>
+  <circle cx="156" cy="158" r="11" fill="#A3E635"/>
+  <circle cx="186" cy="112" r="11" fill="#EC4899"/>
+</svg>

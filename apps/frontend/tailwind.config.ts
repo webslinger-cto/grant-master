@@ -10,6 +10,14 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        gm: {
+          navy: '#0B1F5B',
+          'navy-dark': '#081742',
+          cyan: '#06B6D4',
+          'cyan-soft': '#E6F9FC',
+          lime: '#A3E635',
+          magenta: '#EC4899',
+        },
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',

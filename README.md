@@ -1,4 +1,4 @@
-# GrantOps
+# GrantsMaster
 
 Internal grant management platform for WebSlingerAI to manage funding pipeline across federal, state, and private foundation sources.
 
@@ -15,7 +15,7 @@ Internal grant management platform for WebSlingerAI to manage funding pipeline a
 ## Project Structure
 
 ```
-grantops/
+grant_master/
 ├── apps/
 │   ├── backend/          # NestJS API server
 │   └── frontend/         # Next.js web app

@@ -1,4 +1,4 @@
-# GrantOps Quick Start
+# GrantsMaster Quick Start
 
 Get up and running in 10 minutes.
 
@@ -77,7 +77,7 @@ This starts both backend and frontend.
 ## 6. Verify (1 min)
 
 **Frontend:** http://localhost:3000
-Should show "GrantOps" landing page
+Should show "GrantsMaster" landing page
 
 **Backend:** http://localhost:3001/api/v1
 Should show "Cannot GET /api/v1" (expected - no root route)

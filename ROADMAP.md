@@ -1,4 +1,4 @@
-# GrantOps Development Roadmap
+# GrantsMaster Development Roadmap
 
 ## Overall Timeline: 6-8 Weeks to MVP
 

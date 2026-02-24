@@ -1,0 +1,17 @@
+<svg width="980" height="180" viewBox="0 0 980 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>GrantsMaster logo dark</title>
+  <defs>
+    <style>
+      .wordmark { font: 700 96px Inter, Manrope, "Plus Jakarta Sans", system-ui, -apple-system, Segoe UI, sans-serif; fill: #F8FAFC; }
+    </style>
+  </defs>
+  <polygon points="90,12 160,52 160,128 90,168 20,128 20,52" fill="#0B1F5B"/>
+  <polyline points="42,118 70,90 92,90" stroke="#06B6D4" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="92,90 120,118" stroke="#A3E635" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="120,118 146,78" stroke="#EC4899" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="42" cy="118" r="10" fill="#06B6D4"/>
+  <circle cx="92" cy="90" r="10" fill="#A3E635"/>
+  <circle cx="120" cy="118" r="10" fill="#A3E635"/>
+  <circle cx="146" cy="78" r="10" fill="#EC4899"/>
+  <text x="196" y="122" class="wordmark">GrantsMaster</text>
+</svg>

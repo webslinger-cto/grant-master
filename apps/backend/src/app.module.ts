@@ -18,6 +18,10 @@ import { AuditModule } from './modules/audit/audit.module';
 import { PartnersModule } from './modules/partners/partners.module';
 import { DatabaseModule } from './database/database.module';
 import { EnrichmentModule } from './enrichment/enrichment.module';
+import { ChatModule } from './modules/chat/chat.module';
+import { GeneratedSectionsModule } from './modules/generated-sections/generated-sections.module';
+import { CitationsModule } from './modules/citations/citations.module';
+import { NihIntegrationModule } from './modules/nih-integration/nih-integration.module';
 
 // Conditional imports based on environment
 const conditionalImports: DynamicModule[] = [];
@@ -69,6 +73,10 @@ if (process.env.REDIS_URL) {
     AuditModule,
     PartnersModule,
     EnrichmentModule,
+    ChatModule,
+    GeneratedSectionsModule,
+    CitationsModule,
+    NihIntegrationModule,
   ],
 })
 export class AppModule {}

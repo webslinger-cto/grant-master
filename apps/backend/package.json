@@ -1,7 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "GrantOps Backend API",
+  "description": "GrantsMaster Backend API",
   "scripts": {
     "prebuild": "rimraf dist",
     "build": "nest build",
@@ -22,14 +22,18 @@
     "seed": "ts-node -r tsconfig-paths/register src/database/cli.ts seed:run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.74.0",
     "@nestjs/bullmq": "^10.1.0",
     "@nestjs/common": "^10.3.3",
     "@nestjs/config": "^3.2.0",
     "@nestjs/core": "^10.3.3",
     "@nestjs/event-emitter": "^2.0.4",
     "@nestjs/jwt": "^10.2.0",
+    "@nestjs/mapped-types": "^2.1.0",
     "@nestjs/passport": "^10.0.3",
     "@nestjs/platform-express": "^10.3.3",
+    "@nestjs/platform-socket.io": "^10.4.22",
+    "@nestjs/websockets": "^10.4.22",
     "bcrypt": "^5.1.1",
     "bullmq": "^5.4.0",
     "cheerio": "^1.2.0",
