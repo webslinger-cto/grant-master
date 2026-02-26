@@ -59,10 +59,10 @@ export function SectionsList({ applicationId, onGenerateSection }: SectionsListP
 
   const handleExport = async () => {
     try {
-      const document = await sectionsService.exportApplication(applicationId);
+      const markdown = await sectionsService.exportApplication(applicationId);
 
       // Create a download link
-      const blob = new Blob([document], { type: 'text/markdown' });
+      const blob = new Blob([markdown], { type: 'text/markdown' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
