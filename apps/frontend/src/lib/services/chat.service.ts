@@ -40,6 +40,7 @@ export interface GeneratedSection {
   version_number: number;
   content: string;
   status: 'draft' | 'under_review' | 'approved' | 'rejected';
+  is_current_version: boolean;
   generated_by: string;
   created_at: string;
   updated_at: string;
