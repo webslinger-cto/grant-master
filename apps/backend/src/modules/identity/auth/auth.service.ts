@@ -28,7 +28,7 @@ export class AuthService {
   ) {}
 
   async validateGoogleUser(profile: any): Promise<any> {
-    const { email, name, picture } = profile;
+    const { email, name, picture, googleAccessToken, googleRefreshToken } = profile;
 
     // Find or create user
     let user = await this.usersService.findByEmail(email);
@@ -63,8 +63,11 @@ export class AuthService {
       }
     }
 
-    // Update last login
-    await this.usersService.updateLastLogin(user.id);
+    // Update last login and Google OAuth tokens
+    const tokenUpdate: Record<string, any> = { last_login_at: new Date() };
+    if (googleAccessToken) tokenUpdate.google_access_token = googleAccessToken;
+    if (googleRefreshToken) tokenUpdate.google_refresh_token = googleRefreshToken;
+    await this.db.db('users').where({ id: user.id }).update(tokenUpdate);
 
     return user;
   }

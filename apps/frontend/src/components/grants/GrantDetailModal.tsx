@@ -20,7 +20,7 @@ export function GrantDetailModal({ application, onClose, onUpdate }: Props) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px]" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-lg mx-4 bg-white rounded-xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+      <div className="relative z-10 w-full max-w-2xl mx-4 bg-white rounded-xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
         <div className="flex-1 overflow-y-auto">
           <GrantDetails
             application={application}

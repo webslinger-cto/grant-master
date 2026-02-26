@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FileText, Search, Bookmark, X, ExternalLink, PlusCircle, CheckCircle2, Loader2, ChevronRight } from 'lucide-react';
+import { FileText, Search, Bookmark, X, ExternalLink, PlusCircle, CheckCircle2, Loader2, ChevronRight, FolderOpen } from 'lucide-react';
 import type { Application } from '@/lib/services/applications.service';
 import { bookmarksService, BookmarkedOpp } from '@/lib/services/bookmarks.service';
 import { GrantDetailModal } from './GrantDetailModal';
+import { projectsService, Project } from '@/lib/services/projects.service';
 
 const STAGE_LABELS: Record<string, string> = {
   drafting: 'Drafting',
@@ -53,9 +54,12 @@ export function GrantsList({ applications, selectedId, onSelect, onUpdate, loadi
   const [addingIds, setAddingIds] = useState<Set<string>>(new Set());
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
   const [modalApp, setModalApp] = useState<Application | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [assigningId, setAssigningId] = useState<string | null>(null);
 
   useEffect(() => {
     setBookmarks(bookmarksService.getAll());
+    projectsService.getAll().then(setProjects).catch(() => {});
   }, []);
 
   // Re-sync whenever bookmarks change (e.g. user bookmarks from NIH Search view)
@@ -276,6 +280,29 @@ export function GrantsList({ applications, selectedId, onSelect, onUpdate, loadi
                                   <span className="text-[9px] text-gray-500 flex-none">{app.probability}%</span>
                                 </div>
                               )}
+                            </div>
+
+                            {/* Project assignment */}
+                            <div className="flex items-center gap-1.5">
+                              <FolderOpen className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                              <select
+                                value={app.project_id ?? ''}
+                                disabled={assigningId === app.id}
+                                onChange={async (e) => {
+                                  const projectId = e.target.value || null;
+                                  setAssigningId(app.id);
+                                  try { await onUpdate({ project_id: projectId }); }
+                                  finally { setAssigningId(null); }
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex-1 text-[10px] px-1.5 py-0.5 border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-gm-cyan bg-white text-gray-600 min-w-0"
+                              >
+                                <option value="">No project</option>
+                                {projects.map((p) => (
+                                  <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                              </select>
+                              {assigningId === app.id && <Loader2 className="w-2.5 h-2.5 animate-spin text-gray-400 flex-shrink-0" />}
                             </div>
 
                             {/* Notes snippet */}

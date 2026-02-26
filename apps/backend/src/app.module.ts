@@ -22,6 +22,8 @@ import { ChatModule } from './modules/chat/chat.module';
 import { GeneratedSectionsModule } from './modules/generated-sections/generated-sections.module';
 import { CitationsModule } from './modules/citations/citations.module';
 import { NihIntegrationModule } from './modules/nih-integration/nih-integration.module';
+import { ProjectsModule } from './modules/projects/projects.module';
+import { ExportModule } from './modules/export/export.module';
 
 // Conditional imports based on environment
 const conditionalImports: DynamicModule[] = [];
@@ -62,6 +64,7 @@ if (process.env.REDIS_URL) {
     // Core modules
     IdentityModule,
     CatalogModule,
+    ProjectsModule,
     PipelineModule,
     WorkMgmtModule,
     BudgetsModule,
@@ -77,6 +80,7 @@ if (process.env.REDIS_URL) {
     GeneratedSectionsModule,
     CitationsModule,
     NihIntegrationModule,
+    ExportModule,
   ],
 })
 export class AppModule {}

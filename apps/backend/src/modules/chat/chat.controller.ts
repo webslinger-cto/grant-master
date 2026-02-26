@@ -9,13 +9,20 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { IsString, IsNotEmpty, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsArray, MaxLength } from 'class-validator';
 import { ChatService } from './chat.service';
 import { CreateChatMessageDto } from './dto/create-chat-message.dto';
 import { GenerateSectionDto } from './dto/generate-section.dto';
 import { ChatHistoryQueryDto } from './dto/chat-history.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { Public } from '../../common/decorators/public.decorator';
+
+class ResolveCitationsDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(50000)
+  content: string;
+}
 
 class SaveToDraftDto {
   @IsString()
@@ -30,6 +37,10 @@ class SaveToDraftDto {
   @IsNotEmpty()
   @MaxLength(50000)
   content: string;
+
+  @IsOptional()
+  @IsArray()
+  preResolvedRefs?: any[];
 }
 
 @Controller('chat')
@@ -61,6 +72,18 @@ export class ChatController {
     // Use mock user ID for testing when no auth
     const userId = req.user?.id || '20000001-0000-0000-0000-000000000001';
     return this.chatService.generateSection(userId, dto);
+  }
+
+  /**
+   * Resolve citation markers in content via PubMed — no DB writes.
+   * Used by frontend for eager (pre-save) citation preview.
+   * POST /chat/resolve-citations
+   */
+  @Public()
+  @Post('resolve-citations')
+  @HttpCode(HttpStatus.OK)
+  async resolveCitations(@Body() dto: ResolveCitationsDto) {
+    return this.chatService.resolveForPreview(dto.content);
   }
 
   /**

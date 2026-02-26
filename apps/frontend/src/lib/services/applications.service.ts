@@ -13,6 +13,9 @@ export interface Application {
   opportunity_description?: string;
   outcome_notes?: string;
   metadata?: Record<string, any>;
+  project_id?: string | null;
+  project_name?: string | null;
+  project_context?: Record<string, any> | null;
 }
 
 const MOCK_APPLICATIONS: Application[] = [
@@ -125,6 +128,7 @@ class ApplicationsService {
     current_stage?: string;
     probability?: number;
     outcome_notes?: string | null;
+    project_id?: string | null;
   }): Promise<Application> {
     const res = await api.post<any>('/pipeline/applications', data);
     const created: Application = res?.data ?? res;

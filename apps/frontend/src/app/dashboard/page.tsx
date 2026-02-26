@@ -4,12 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   List, FileText, MessageSquare,
   ChevronLeft, ChevronRight, RefreshCw,
-  Briefcase, Search, PanelLeftClose, PanelLeftOpen,
+  Briefcase, Search, PanelLeftClose, PanelLeftOpen, Folder,
 } from 'lucide-react';
 import { GrantsList } from '@/components/grants/GrantsList';
 import { DocumentPanel } from '@/components/documents/DocumentPanel';
 import { InlineChatPanel } from '@/components/chat/InlineChatPanel';
 import { GrantsSearch } from '@/components/grants/GrantsSearch';
+import { ProjectsView } from '@/components/projects/ProjectsView';
 import { BrandLogo } from '@/components/BrandLogo';
 import { applicationsService, Application } from '@/lib/services/applications.service';
 
@@ -27,7 +28,7 @@ function getUserId(): string {
   return MOCK_USER_ID;
 }
 
-type ActiveView = 'pipeline' | 'search';
+type ActiveView = 'pipeline' | 'search' | 'projects';
 
 interface PanelState {
   list: boolean;
@@ -38,7 +39,8 @@ interface PanelState {
 // ── Left Nav Column ───────────────────────────────────────────────────
 const NAV_ITEMS: { key: ActiveView; icon: any; label: string }[] = [
   { key: 'search',   icon: Search,    label: 'NIH Search' },
-  { key: 'pipeline', icon: Briefcase, label: 'Pipeline' },
+  { key: 'projects', icon: Folder,    label: 'Projects'   },
+  { key: 'pipeline', icon: Briefcase, label: 'Pipeline'   },
 ];
 
 interface NavColumnProps {
@@ -83,8 +85,8 @@ function NavColumn({ activeView, onViewChange, collapsed, onToggle }: NavColumnP
                 collapsed ? 'justify-center px-0 py-3' : 'gap-3 px-4 py-2.5'
               } ${
                 active
-                  ? 'text-gm-navy bg-gm-cyan-soft border-r-2 border-gm-navy'
-                  : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50 border-r-2 border-transparent'
+                  ? 'text-gm-navy bg-gm-cyan-soft border-l-2 border-l-gm-navy'
+                  : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50 border-l-2 border-l-transparent'
               }`}
             >
               <Icon className="w-4 h-4 flex-shrink-0" />
@@ -190,6 +192,11 @@ export default function DashboardPage() {
                   </>
                 )}
               </>
+            ) : activeView === 'projects' ? (
+              <>
+                <Folder className="w-3.5 h-3.5 text-gray-400" />
+                <span className="text-xs font-semibold text-gray-700">Projects</span>
+              </>
             ) : (
               <>
                 <Search className="w-3.5 h-3.5 text-gray-400" />
@@ -240,6 +247,16 @@ export default function DashboardPage() {
         {activeView === 'search' ? (
           <div className="flex-1 overflow-hidden">
             <GrantsSearch />
+          </div>
+        ) : activeView === 'projects' ? (
+          <div className="flex-1 overflow-hidden flex">
+            <ProjectsView
+              onNavigateToPipeline={(appId) => {
+                const app = applications.find((a) => a.id === appId);
+                if (app) setSelectedApp(app);
+                setActiveView('pipeline');
+              }}
+            />
           </div>
         ) : (
           /* Pipeline 4-panel layout */
@@ -333,6 +350,7 @@ export default function DashboardPage() {
                 <div className="flex-1 overflow-hidden">
                   <DocumentPanel
                     applicationId={selectedApp?.id ?? null}
+                    applicationName={selectedApp?.internal_name}
                     refreshTick={docRefreshTick}
                   />
                 </div>
@@ -346,9 +364,10 @@ export default function DashboardPage() {
             >
               <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 flex-none">
                 {!panels.chat && (
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
-                    AI Counsel
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">AI Counsel</span>
+                    {selectedApp && <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" title="Ready" />}
+                  </div>
                 )}
                 <button
                   onClick={() => togglePanel('chat')}

@@ -9,5 +9,5 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Environment variables needed (set in Netlify dashboard):
-# NEXT_PUBLIC_API_URL = https://grantsmaster.onrender.com/api/v1
+# Environment variables — set these in the Netlify dashboard:
+# NEXT_PUBLIC_API_URL = https://grantops-backend.onrender.com/api/v1

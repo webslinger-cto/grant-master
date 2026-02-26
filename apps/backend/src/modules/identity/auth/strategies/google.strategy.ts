@@ -14,7 +14,9 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       clientID: configService.get('GOOGLE_CLIENT_ID'),
       clientSecret: configService.get('GOOGLE_CLIENT_SECRET'),
       callbackURL: configService.get('GOOGLE_CALLBACK_URL'),
-      scope: ['email', 'profile'],
+      scope: ['email', 'profile', 'https://www.googleapis.com/auth/drive.file'],
+      accessType: 'offline',
+      prompt: 'consent',
     });
   }
 
@@ -30,6 +32,8 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       email: emails[0].value,
       name: displayName,
       picture: photos[0]?.value,
+      googleAccessToken: accessToken,
+      googleRefreshToken: refreshToken,
     });
 
     done(null, user);

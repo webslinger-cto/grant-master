@@ -10,8 +10,11 @@ export class PipelineService {
       .select(
         'applications.*',
         'opportunities.title as opportunity_title',
+        'projects.name as project_name',
+        'projects.context as project_context',
       )
       .leftJoin('opportunities', 'applications.opportunity_id', 'opportunities.id')
+      .leftJoin('projects', 'applications.project_id', 'projects.id')
       .orderBy('applications.submission_deadline', 'asc');
     return rows;
   }
@@ -23,8 +26,11 @@ export class PipelineService {
         'applications.*',
         'opportunities.title as opportunity_title',
         'opportunities.description as opportunity_description',
+        'projects.name as project_name',
+        'projects.context as project_context',
       )
       .leftJoin('opportunities', 'applications.opportunity_id', 'opportunities.id')
+      .leftJoin('projects', 'applications.project_id', 'projects.id')
       .first();
   }
 
@@ -35,6 +41,7 @@ export class PipelineService {
     current_stage?: string;
     probability?: number;
     outcome_notes?: string | null;
+    project_id?: string | null;
   }) {
     const [row] = await this.db.db('applications')
       .insert({
@@ -44,6 +51,7 @@ export class PipelineService {
         current_stage: data.current_stage ?? 'qualification',
         probability: data.probability ?? 20,
         outcome_notes: data.outcome_notes ?? null,
+        project_id: data.project_id ?? null,
         // Use existing seed user so FK constraint is satisfied
         created_by: '20000001-0000-0000-0000-000000000002',
       })
@@ -61,6 +69,7 @@ export class PipelineService {
       'probability',
       'outcome_notes',
       'metadata',
+      'project_id',
     ];
     const updateData: Record<string, any> = { updated_at: new Date() };
     for (const key of allowed) {

@@ -4,10 +4,11 @@ import { useState, useRef, useEffect } from 'react';
 import {
   Search, Loader2, ExternalLink, ChevronDown, ChevronUp,
   Calendar, Building2, DollarSign, FileText, BookOpen, X, Clock, Bookmark, BookmarkCheck,
-  PlusCircle, CheckCircle2,
+  PlusCircle, CheckCircle2, FolderOpen,
 } from 'lucide-react';
 import { nihService, NihOpportunity, NihProject } from '@/lib/services/nih.service';
 import { bookmarksService } from '@/lib/services/bookmarks.service';
+import { projectsService, Project } from '@/lib/services/projects.service';
 
 type SearchMode = 'opportunities' | 'projects';
 
@@ -197,9 +198,22 @@ function formatMoney(n: number | null | undefined) {
 function OppDetail({ opp, bookmarked, onBookmark }: { opp: NihOpportunity; bookmarked: boolean; onBookmark: () => void }) {
   const [adding, setAdding] = useState(false);
   const [added, setAdded] = useState(false);
+  const [showProjectPicker, setShowProjectPicker] = useState(false);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
 
-  const addToPipeline = async () => {
+  const openProjectPicker = async () => {
+    if (!projectsLoaded) {
+      const data = await projectsService.getAll().catch(() => []);
+      setProjects(data);
+      setProjectsLoaded(true);
+    }
+    setShowProjectPicker(true);
+  };
+
+  const addToPipeline = async (projectId?: string | null) => {
     setAdding(true);
+    setShowProjectPicker(false);
     try {
       const { applicationsService } = await import('@/lib/services/applications.service');
       await applicationsService.create({
@@ -208,16 +222,16 @@ function OppDetail({ opp, bookmarked, onBookmark }: { opp: NihOpportunity; bookm
         submission_deadline: opp.closeDate ?? null,
         current_stage: 'qualification',
         probability: 10,
+        project_id: projectId ?? null,
         outcome_notes: [
           opp.opportunityNumber && `Opportunity: ${opp.opportunityNumber}`,
           opp.agency && `Agency: ${opp.agency}`,
         ].filter(Boolean).join('\n') || null,
       });
       setAdded(true);
-      // Remove from bookmarks once in pipeline
       if (bookmarked) onBookmark();
     } catch {
-      /* silently fail — user can retry */
+      /* silently fail */
     } finally {
       setAdding(false);
     }
@@ -232,7 +246,7 @@ function OppDetail({ opp, bookmarked, onBookmark }: { opp: NihOpportunity; bookm
     <div className="h-full overflow-y-auto px-5 py-5">
       <div className="flex items-start justify-between gap-3 mb-3">
         <h2 className="text-sm font-semibold text-gray-900 leading-snug">{opp.title}</h2>
-        <div className="flex flex-col gap-1.5 flex-shrink-0">
+        <div className="relative flex flex-col gap-1.5 flex-shrink-0">
           <button
             onClick={onBookmark}
             title={bookmarked ? 'Remove from Shortlist' : 'Save to Shortlist'}
@@ -248,7 +262,7 @@ function OppDetail({ opp, bookmarked, onBookmark }: { opp: NihOpportunity; bookm
             }
           </button>
           <button
-            onClick={addToPipeline}
+            onClick={openProjectPicker}
             disabled={adding || added}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-semibold border transition-colors ${
               added
@@ -264,6 +278,46 @@ function OppDetail({ opp, bookmarked, onBookmark }: { opp: NihOpportunity; bookm
               <><PlusCircle className="w-3 h-3" /> Add to Pipeline</>
             )}
           </button>
+
+          {/* Project picker popover */}
+          {showProjectPicker && !adding && !added && (
+            <>
+              {/* invisible backdrop to close on outside click */}
+              <div
+                className="fixed inset-0 z-20"
+                onClick={() => setShowProjectPicker(false)}
+              />
+              <div className="absolute right-0 top-full mt-1 z-30 w-52 bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+                <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-100">
+                  Assign to project
+                </p>
+                <button
+                  onClick={() => addToPipeline(null)}
+                  className="w-full text-left px-3 py-2 text-xs text-gray-600 hover:bg-gm-cyan-soft hover:text-gm-navy transition-colors"
+                >
+                  Quick add (no project)
+                </button>
+                {!projectsLoaded ? (
+                  <div className="flex items-center justify-center py-3">
+                    <Loader2 className="w-3 h-3 animate-spin text-gray-400" />
+                  </div>
+                ) : projects.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-gray-400 italic">No projects yet</p>
+                ) : (
+                  projects.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => addToPipeline(p.id)}
+                      className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gm-cyan-soft hover:text-gm-navy transition-colors flex items-center gap-1.5"
+                    >
+                      <FolderOpen className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                      <span className="truncate">{p.name}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 

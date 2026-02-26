@@ -4,6 +4,21 @@ import { DatabaseService } from '@/database/database.service';
 import Anthropic from '@anthropic-ai/sdk';
 import { CreateChatMessageDto } from './dto/create-chat-message.dto';
 import { GenerateSectionDto } from './dto/generate-section.dto';
+import { PubMedService, PubMedArticle } from './pubmed.service';
+
+interface ResolvedRef {
+  number: number;
+  original: string;
+  article: PubMedArticle | null;
+}
+
+export interface PreviewRef {
+  number: number;
+  nlmFormatted: string;
+  pmid: string | null;
+  pubmedUrl: string | null;
+  unverified: boolean;
+}
 
 @Injectable()
 export class ChatService {
@@ -17,6 +32,7 @@ export class ChatService {
   constructor(
     private readonly db: DatabaseService,
     private readonly configService: ConfigService,
+    private readonly pubMedService: PubMedService,
   ) {
     const apiKey = this.configService.get<string>('ANTHROPIC_API_KEY');
     if (!apiKey) {
@@ -85,6 +101,7 @@ export class ChatService {
         'projects.name as project_name',
         'projects.description as project_description',
         'projects.clinical_area',
+        'projects.context as project_context',
         'opportunities.title as opportunity_title',
         'opportunities.description as opportunity_description',
         'funding_sources.name as funding_source_name',
@@ -112,8 +129,11 @@ Amount Requested: ${application.amount_requested ? `$${application.amount_reques
 Submission Deadline: ${application.submission_deadline || 'N/A'}
 Current Stage: ${application.current_stage}`.trim();
 
-    // Inject project-specific intake data if the user completed the intake questionnaire
-    const intake = application.metadata?.intake;
+    // Project-level context takes priority over per-grant intake metadata
+    const intake = (application.project_context && Object.keys(application.project_context).length > 0)
+      ? application.project_context
+      : application.metadata?.intake;
+
     if (intake && typeof intake === 'object') {
       context += `
 
@@ -140,6 +160,158 @@ Development Stage: ${intake.developmentStage || 'N/A'}`;
       .where('application_id', applicationId)
       .orderBy('created_at', 'desc')
       .limit(limit);
+  }
+
+  // ── Citation helpers ────────────────────────────────────────────────
+
+  private sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Extract and resolve the ---REFERENCES--- block from AI-generated content.
+   * Returns the clean content (block stripped) plus an array of resolved references.
+   */
+  async resolveCitations(content: string): Promise<{
+    cleanContent: string;
+    refs: ResolvedRef[];
+  }> {
+    const blockMatch = content.match(/---REFERENCES---\n([\s\S]*?)---END REFERENCES---/);
+    if (!blockMatch) return { cleanContent: content, refs: [] };
+
+    const cleanContent = content
+      .replace(/\n*---REFERENCES---[\s\S]*?---END REFERENCES---/, '')
+      .trim();
+
+    const lines = blockMatch[1]
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => /^\[\d+\]/.test(l));
+
+    const refs: ResolvedRef[] = [];
+    for (const line of lines) {
+      const numMatch = line.match(/^\[(\d+)\]/);
+      if (!numMatch) continue;
+      const number = parseInt(numMatch[1], 10);
+      const refText = line.replace(/^\[\d+\]\s*/, '').trim();
+
+      // Rate-limit: NCBI allows ~3 req/s without an API key
+      if (refs.length > 0) await this.sleep(400);
+
+      const article = await this.pubMedService.resolveReference(refText);
+      refs.push({ number, original: refText, article });
+    }
+
+    return { cleanContent, refs };
+  }
+
+  /**
+   * Resolve citations for frontend preview — no DB writes, returns a
+   * frontend-friendly shape with NLM-formatted strings and PubMed links.
+   */
+  async resolveForPreview(content: string): Promise<{
+    cleanContent: string;
+    refs: PreviewRef[];
+  }> {
+    const { cleanContent, refs } = await this.resolveCitations(content);
+    const previewRefs: PreviewRef[] = refs.map(({ number, original, article }) => {
+      if (article) {
+        return {
+          number,
+          nlmFormatted: article.nlmFormatted,
+          pmid: article.pmid,
+          pubmedUrl: article.pubmedUrl,
+          unverified: false,
+        };
+      }
+      return {
+        number,
+        nlmFormatted: original,
+        pmid: null,
+        pubmedUrl: null,
+        unverified: true,
+      };
+    });
+    return { cleanContent, refs: previewRefs };
+  }
+
+  /**
+   * Save / merge resolved references into the application's References section.
+   * Deduplicates by PMID; re-numbers the entire list.
+   */
+  private async saveOrMergeReferences(
+    applicationId: string,
+    userId: string,
+    refs: ResolvedRef[],
+  ): Promise<void> {
+    if (!refs.length) return;
+
+    const existing = await this.db.db('generated_sections')
+      .where('application_id', applicationId)
+      .where('section_name', 'References')
+      .where('is_current_version', true)
+      .first();
+
+    const existingPmids = new Set<string>(existing?.generation_metadata?.pmids ?? []);
+
+    // Parse existing numbered lines
+    const existingLines: string[] = existing
+      ? existing.content
+          .split('\n\n')
+          .map((l: string) => l.trim())
+          .filter(Boolean)
+          .map((l: string) => l.replace(/^\[\d+\]\s*/, '').trim())
+      : [];
+
+    const newLines: string[] = [];
+    const newPmids: string[] = [];
+
+    for (const { original, article } of refs) {
+      if (article) {
+        if (existingPmids.has(article.pmid)) continue; // already present
+        newLines.push(article.nlmFormatted);
+        newPmids.push(article.pmid);
+        existingPmids.add(article.pmid);
+      } else {
+        newLines.push(`[UNVERIFIED] ${original} — could not find a matching paper on PubMed. Please verify manually.`);
+      }
+    }
+
+    if (!newLines.length) return;
+
+    // Merge and re-number
+    const allLines = [...existingLines, ...newLines];
+    const numbered = allLines.map((line, i) => `[${i + 1}] ${line}`).join('\n\n');
+    const allPmids = [...Array.from(existingPmids), ...newPmids];
+
+    let versionNumber = 1;
+    if (existing) {
+      await this.db.db('generated_sections')
+        .where('id', existing.id)
+        .update({ is_current_version: false });
+      versionNumber = existing.version_number + 1;
+    }
+
+    const template = await this.db.db('section_templates')
+      .where('section_key', 'references')
+      .first();
+
+    await this.db.db('generated_sections').insert({
+      application_id: applicationId,
+      section_template_id: template?.id ?? null,
+      section_name: 'References',
+      version_number: versionNumber,
+      content: numbered,
+      prompt_used: 'Auto-populated from PubMed citation resolution',
+      generation_metadata: { source: 'citation_resolution', pmids: allPmids },
+      status: 'draft',
+      generated_by: userId,
+      is_current_version: true,
+    });
+
+    this.logger.log(
+      `References section updated: +${newLines.length} entries (total ${allLines.length})`,
+    );
   }
 
   /**
@@ -276,7 +448,29 @@ When helping with application strategy, always remind the user:
 
 ---
 
-Be direct, specific, and expert. When drafting content, produce reviewer-ready prose, not placeholders. When giving feedback, cite which review criterion is weakest and why. Always prioritize scientific rigor over generic encouragement.`;
+Be direct, specific, and expert. When drafting content, produce reviewer-ready prose, not placeholders. When giving feedback, cite which review criterion is weakest and why. Always prioritize scientific rigor over generic encouragement.
+
+---
+
+## CITATION REQUIREMENTS
+
+Every factual claim, statistic, or reference to prior research MUST include an inline numbered citation [1], [2], etc.
+
+At the very END of your response (after all prose), append a REFERENCES block in this EXACT format — do not alter the delimiters:
+
+---REFERENCES---
+[1] SEARCH: augmented reality surgical navigation accuracy intraoperative 2022
+[2] PMID: 36429867
+[3] SEARCH: head-mounted display neurosurgery outcome clinical trial
+---END REFERENCES---
+
+Rules:
+- Use PMID: only when you are highly confident the PMID is correct. Use SEARCH: when unsure — it is always safer.
+- Make SEARCH queries specific (5–10 words; include study type, year range, or mesh terms when relevant).
+- Minimum 3–5 citations for Significance, Approach, and Innovation sections.
+- If the response contains zero factual or statistical claims (e.g. a purely strategic recommendation), omit the block entirely.
+- Never fabricate a PMID. A wrong PMID will be caught and flagged. Use SEARCH instead.`;
+
 
 
     try {
@@ -331,12 +525,14 @@ Be direct, specific, and expert. When drafting content, produce reviewer-ready p
   }
 
   /**
-   * Save chat response content directly as a draft section (no AI call)
+   * Save chat response content as a draft section, resolving any PubMed citations first.
+   * If the content contains a ---REFERENCES--- block, references are resolved via PubMed
+   * and merged into the application's References section automatically.
    */
   async saveToDraft(
     userId: string,
-    dto: { applicationId: string; sectionKey: string; content: string },
-  ): Promise<any> {
+    dto: { applicationId: string; sectionKey: string; content: string; preResolvedRefs?: PreviewRef[] },
+  ): Promise<{ section: any; citationsAdded: number; citationsVerified: number }> {
     const template = await this.db.db('section_templates')
       .where('section_key', dto.sectionKey)
       .where('is_active', true)
@@ -346,7 +542,36 @@ Be direct, specific, and expert. When drafting content, produce reviewer-ready p
       throw new BadRequestException(`Section template '${dto.sectionKey}' not found`);
     }
 
-    // Handle versioning — mark any existing current version as superseded
+    // ── Resolve citations ───────────────────────────────────────────────
+    let cleanContent: string;
+    let refs: ResolvedRef[];
+    let citationsVerified: number;
+
+    if (dto.preResolvedRefs && dto.preResolvedRefs.length > 0) {
+      // Fast path: citations already resolved by client — skip PubMed round-trip
+      cleanContent = dto.content; // frontend sends clean content (block already stripped)
+      refs = dto.preResolvedRefs.map((r) => ({
+        number: r.number,
+        original: r.nlmFormatted,
+        article: !r.unverified && r.pmid
+          ? {
+              pmid: r.pmid,
+              nlmFormatted: r.nlmFormatted,
+              pubmedUrl: r.pubmedUrl ?? `https://pubmed.ncbi.nlm.nih.gov/${r.pmid}/`,
+              title: '', authors: [], journal: '', year: '',
+            } as PubMedArticle
+          : null,
+      }));
+      citationsVerified = dto.preResolvedRefs.filter((r) => !r.unverified).length;
+    } else {
+      // Standard path: resolve citations via PubMed now
+      const resolved = await this.resolveCitations(dto.content);
+      cleanContent = resolved.cleanContent;
+      refs = resolved.refs;
+      citationsVerified = refs.filter((r) => r.article !== null).length;
+    }
+
+    // ── Handle versioning ───────────────────────────────────────────────
     const existing = await this.db.db('generated_sections')
       .where('application_id', dto.applicationId)
       .where('section_name', template.section_name)
@@ -361,23 +586,37 @@ Be direct, specific, and expert. When drafting content, produce reviewer-ready p
       versionNumber = existing.version_number + 1;
     }
 
-    const [saved] = await this.db.db('generated_sections')
+    const [section] = await this.db.db('generated_sections')
       .insert({
         application_id: dto.applicationId,
         section_template_id: template.id,
         section_name: template.section_name,
         version_number: versionNumber,
-        content: dto.content,
+        content: cleanContent,
         prompt_used: 'Saved from AI Counsel chat',
-        generation_metadata: { model: 'chat', source: 'chat_panel' },
+        generation_metadata: {
+          model: 'chat',
+          source: 'chat_panel',
+          citations_resolved: citationsVerified,
+          citations_total: refs.length,
+        },
         status: 'draft',
         generated_by: userId,
         is_current_version: true,
       })
       .returning('*');
 
-    this.logger.log(`Draft saved from chat: ${template.section_name} (v${versionNumber})`);
-    return saved;
+    // ── Merge references into References section ────────────────────────
+    if (refs.length > 0) {
+      await this.saveOrMergeReferences(dto.applicationId, userId, refs);
+    }
+
+    this.logger.log(
+      `Draft saved: ${template.section_name} (v${versionNumber}) · ` +
+      `${citationsVerified}/${refs.length} citations verified`,
+    );
+
+    return { section, citationsAdded: refs.length, citationsVerified };
   }
 
   /**

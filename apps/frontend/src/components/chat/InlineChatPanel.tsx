@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Sparkles, Loader2, PenLine, FilePlus, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Send, Sparkles, Loader2, PenLine, FilePlus, Check, ChevronDown, ChevronUp, BookOpen, ExternalLink, X } from 'lucide-react';
 import { chatService, ChatMessage } from '@/lib/services/chat.service';
 import { api } from '@/lib/api';
 import { Application } from '@/lib/services/applications.service';
@@ -49,6 +49,35 @@ const QUICK_ACTIONS = [
   },
 ];
 
+/** Split AI message content into prose and an optional references block */
+function parseMessageContent(raw: string): {
+  prose: string;
+  refLines: string[]; // e.g. ["[1] SEARCH: ...", "[2] PMID: ..."]
+} {
+  const match = raw.match(/---REFERENCES---\n([\s\S]*?)---END REFERENCES---/);
+  if (!match) return { prose: raw, refLines: [] };
+  const prose = raw.replace(/\n*---REFERENCES---[\s\S]*?---END REFERENCES---/, '').trim();
+  const refLines = match[1]
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => /^\[\d+\]/.test(l));
+  return { prose, refLines };
+}
+
+interface PreviewRef {
+  number: number;
+  nlmFormatted: string;
+  pmid: string | null;
+  pubmedUrl: string | null;
+  unverified: boolean;
+}
+
+interface CitationResolution {
+  status: 'resolving' | 'resolved' | 'error';
+  cleanContent?: string;
+  refs?: PreviewRef[];
+}
+
 interface Props {
   applicationId: string | null;
   application: Application | null;
@@ -62,6 +91,9 @@ interface DraftState {
   open: boolean;
   saving: boolean;
   saved: boolean;
+  citationsVerified?: number;
+  citationsTotal?: number;
+  refExpanded?: boolean;
 }
 
 export function InlineChatPanel({
@@ -77,7 +109,9 @@ export function InlineChatPanel({
   const [showIntake, setShowIntake] = useState(false);
   const [intakeCompleted, setIntakeCompleted] = useState(false);
   const [draftStates, setDraftStates] = useState<Record<string, DraftState>>({});
-  const [contextExpanded, setContextExpanded] = useState(false);
+  const [citationResolutions, setCitationResolutions] = useState<Record<string, CitationResolution>>({});
+  const [contextDialogOpen, setContextDialogOpen] = useState(false);
+  const [quickActionsExpanded, setQuickActionsExpanded] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -94,18 +128,29 @@ export function InlineChatPanel({
     prevAppId.current = applicationId;
     setMessages([]);
     setDraftStates({});
+    setCitationResolutions({});
 
-    // Show intake if never started, or started but not yet marked complete
-    const hasCompletedIntake = !!application?.metadata?.intakeComplete;
+    // Show intake if never started, or started but not yet marked complete.
+    // Also treat a non-empty project_context (inherited from a Project) as complete.
+    const hasProjectContext = !!(
+      application?.project_context &&
+      Object.keys(application.project_context).length > 0
+    );
+    const hasCompletedIntake = !!application?.metadata?.intakeComplete || hasProjectContext;
     setIntakeCompleted(hasCompletedIntake);
     setShowIntake(!hasCompletedIntake);
 
     if (hasCompletedIntake) {
       chatService.getChatHistory(applicationId)
-        .then(setMessages)
+        .then((msgs) => {
+          setMessages(msgs);
+          msgs.forEach((msg) => {
+            if (msg.role === 'assistant') triggerEagerResolution(msg.id, msg.content);
+          });
+        })
         .catch(() => {});
     }
-  }, [applicationId, application]);
+  }, [applicationId, application]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleIntakeComplete = async (intakeData: IntakeData) => {
     if (!applicationId || !application) return;
@@ -117,7 +162,39 @@ export function InlineChatPanel({
     await onApplicationUpdate?.({ metadata: updatedMetadata });
     setIntakeCompleted(true);  // set locally — don't wait for prop to propagate
     setShowIntake(false);
-    chatService.getChatHistory(applicationId).then(setMessages).catch(() => {});
+    chatService.getChatHistory(applicationId)
+      .then((msgs) => {
+        setMessages(msgs);
+        msgs.forEach((msg) => {
+          if (msg.role === 'assistant') triggerEagerResolution(msg.id, msg.content);
+        });
+      })
+      .catch(() => {});
+  };
+
+  const triggerEagerResolution = async (msgId: string, content: string) => {
+    const { refLines } = parseMessageContent(content);
+    if (!refLines.length) return;
+
+    // Guard: skip if already resolving/resolved for this message
+    let alreadyHandled = false;
+    setCitationResolutions((prev) => {
+      if (prev[msgId]) { alreadyHandled = true; return prev; }
+      return { ...prev, [msgId]: { status: 'resolving' } };
+    });
+    // Wait one tick for setState to flush before checking the flag
+    await new Promise((r) => setTimeout(r, 0));
+    if (alreadyHandled) return;
+    try {
+      const body = await api.post<any>('/chat/resolve-citations', { content });
+      const payload = body?.data ?? body;
+      setCitationResolutions((prev) => ({
+        ...prev,
+        [msgId]: { status: 'resolved', cleanContent: payload.cleanContent, refs: payload.refs },
+      }));
+    } catch {
+      setCitationResolutions((prev) => ({ ...prev, [msgId]: { status: 'error' } }));
+    }
   };
 
   // Called after each step to persist partial progress
@@ -164,6 +241,7 @@ export function InlineChatPanel({
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, assistantMsg]);
+      triggerEagerResolution(assistantId, assistantContent);
       onSectionGenerated?.();
     } catch (err: any) {
       const errMsg = err?.response?.data?.errors?.[0]?.message ?? 'Failed to get a response. Please try again.';
@@ -206,15 +284,29 @@ export function InlineChatPanel({
 
   const saveAsDraft = async (msgId: string, sectionKey: string, content: string) => {
     if (!applicationId) return;
+    const resolution = citationResolutions[msgId];
+    const hasPreResolved = resolution?.status === 'resolved' && !!resolution.refs?.length;
+    const contentToSave = hasPreResolved ? resolution.cleanContent! : content;
+
     setDraftStates((prev) => ({
       ...prev,
       [msgId]: { open: false, saving: true, saved: false },
     }));
     try {
-      await api.post('/chat/save-to-draft', { applicationId, sectionKey, content });
+      const requestBody: any = { applicationId, sectionKey, content: contentToSave };
+      if (hasPreResolved) requestBody.preResolvedRefs = resolution.refs;
+
+      const body = await api.post<any>('/chat/save-to-draft', requestBody);
+      const payload = body?.data ?? body;
       setDraftStates((prev) => ({
         ...prev,
-        [msgId]: { open: false, saving: false, saved: true },
+        [msgId]: {
+          open: false,
+          saving: false,
+          saved: true,
+          citationsVerified: payload?.citationsVerified ?? 0,
+          citationsTotal: payload?.citationsAdded ?? (resolution?.refs?.length ?? 0),
+        },
       }));
       onSectionGenerated?.();
     } catch {
@@ -245,128 +337,86 @@ export function InlineChatPanel({
   // ── Normal chat view ─────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full bg-white">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100 flex-none">
-        <Sparkles className="w-4 h-4 text-gm-navy" />
-        <span className="text-sm font-semibold text-gray-800">AI Counsel</span>
-        {!noApp && (
-          <span className="ml-auto w-1.5 h-1.5 rounded-full bg-green-400" title="Ready" />
-        )}
-      </div>
 
-      {/* Project Context Summary — visible when intake is complete */}
-      {intakeCompleted && application?.metadata?.intake && (() => {
-        const intake = application.metadata.intake as IntakeData & { _step?: number };
+      {/* Project Context chip — opens dialog */}
+      {intakeCompleted && (() => {
+        const intake = (
+          application?.project_context && Object.keys(application.project_context).length > 0
+            ? application.project_context
+            : application?.metadata?.intake
+        ) as (IntakeData & { _step?: number }) | undefined;
+        if (!intake) return null;
+        const isFromProject = !!(application?.project_context && Object.keys(application.project_context).length > 0);
         return (
-          <div className="border-b border-gray-100 flex-none">
+          <div className="flex items-center gap-2 px-3 py-1.5 border-b border-gray-100 flex-none">
             <button
-              onClick={() => setContextExpanded((v) => !v)}
-              className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 transition-colors"
+              onClick={() => setContextDialogOpen(true)}
+              className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-gm-navy hover:opacity-75 transition-opacity"
             >
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-gm-navy">Project Context</span>
-                <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Saved</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowEditModal(true); }}
-                  className="text-[10px] text-gray-400 hover:text-gm-navy flex items-center gap-0.5 transition-colors"
-                  title="Edit project context"
-                >
-                  <PenLine className="w-2.5 h-2.5" />
-                  Edit
-                </button>
-                {contextExpanded
-                  ? <ChevronUp className="w-3 h-3 text-gray-400" />
-                  : <ChevronDown className="w-3 h-3 text-gray-400" />}
-              </div>
+              Project Context
+              {isFromProject ? (
+                <span className="text-[9px] bg-gm-cyan-soft text-gm-navy px-1.5 py-0.5 rounded-full font-medium normal-case">From Project</span>
+              ) : (
+                <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium normal-case">Saved</span>
+              )}
             </button>
-
-            {contextExpanded && (
-              <div className="px-3 pb-3 space-y-2 text-xs">
-                {intake.projectName && (
-                  <div>
-                    <span className="text-[9px] uppercase tracking-wider font-semibold text-gray-400">Project</span>
-                    <p className="text-gray-800 font-medium">{intake.projectName}</p>
-                  </div>
-                )}
-                {intake.oneLiner && (
-                  <div>
-                    <span className="text-[9px] uppercase tracking-wider font-semibold text-gray-400">One-liner</span>
-                    <p className="text-gray-700 leading-relaxed">{intake.oneLiner}</p>
-                  </div>
-                )}
-                {intake.clinicalProblem && (
-                  <div>
-                    <span className="text-[9px] uppercase tracking-wider font-semibold text-gray-400">Clinical Problem</span>
-                    <p className="text-gray-700 leading-relaxed line-clamp-3">{intake.clinicalProblem}</p>
-                  </div>
-                )}
-                {intake.targetUsers && (
-                  <div>
-                    <span className="text-[9px] uppercase tracking-wider font-semibold text-gray-400">Target Users</span>
-                    <p className="text-gray-700">{intake.targetUsers}</p>
-                  </div>
-                )}
-                {intake.coreTechnology && (
-                  <div>
-                    <span className="text-[9px] uppercase tracking-wider font-semibold text-gray-400">Core Technology</span>
-                    <p className="text-gray-700 leading-relaxed line-clamp-2">{intake.coreTechnology}</p>
-                  </div>
-                )}
-                {intake.differentiation && (
-                  <div>
-                    <span className="text-[9px] uppercase tracking-wider font-semibold text-gray-400">Differentiation</span>
-                    <p className="text-gray-700 leading-relaxed line-clamp-2">{intake.differentiation}</p>
-                  </div>
-                )}
-                {intake.fundingMechanism && (
-                  <div>
-                    <span className="text-[9px] uppercase tracking-wider font-semibold text-gray-400">Funding Mechanism</span>
-                    <p className="text-gray-700">{intake.fundingMechanism}</p>
-                  </div>
-                )}
-                {intake.developmentStage && (
-                  <div>
-                    <span className="text-[9px] uppercase tracking-wider font-semibold text-gray-400">Stage</span>
-                    <p className="text-gray-700">{intake.developmentStage}</p>
-                  </div>
-                )}
-              </div>
+            {!isFromProject && (
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="ml-auto flex items-center gap-0.5 text-[10px] text-gray-400 hover:text-gm-navy transition-colors"
+                title="Edit project context"
+              >
+                <PenLine className="w-2.5 h-2.5" />
+                Edit
+              </button>
             )}
           </div>
         );
       })()}
 
-      {/* Quick Actions — locked until intake complete */}
-      <div className="px-3 py-2.5 border-b border-gray-50 bg-gray-50 flex-none">
-        <div className="flex items-center justify-between mb-2">
+      {/* Quick Actions — collapsed by default */}
+      <div className="border-b border-gray-100 bg-gray-50 flex-none">
+        <button
+          onClick={() => setQuickActionsExpanded((v) => !v)}
+          className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-100/60 transition-colors"
+        >
           <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Quick Actions</p>
-          {!intakeComplete && !noApp && (
-            <button
-              onClick={() => setShowIntake(true)}
-              className="text-[10px] text-gm-navy hover:underline"
-            >
-              Add project context first →
-            </button>
-          )}
-        </div>
-        <div className="grid grid-cols-2 gap-1.5">
-          {QUICK_ACTIONS.map((a) => (
-            <button
-              key={a.label}
-              disabled={isLoading || noApp || !intakeComplete}
-              onClick={() => { setInput(a.prompt); inputRef.current?.focus(); }}
-              className="text-[11px] text-left px-2.5 py-1.5 bg-white rounded-md border border-gray-200 text-gray-600 hover:border-gm-cyan-soft hover:bg-gm-cyan-soft hover:text-gm-navy transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {a.label}
-            </button>
-          ))}
-        </div>
-        {!intakeComplete && !noApp && (
-          <p className="text-[10px] text-gray-400 mt-2 text-center">
-            Complete project context to unlock quick actions
-          </p>
+          <div className="flex items-center gap-2">
+            {!intakeComplete && !noApp && (
+              <span className="text-[10px] text-amber-500">context needed</span>
+            )}
+            {quickActionsExpanded
+              ? <ChevronUp className="w-3 h-3 text-gray-400" />
+              : <ChevronDown className="w-3 h-3 text-gray-400" />}
+          </div>
+        </button>
+        {quickActionsExpanded && (
+          <div className="px-3 pb-2.5">
+            <div className="grid grid-cols-2 gap-1.5">
+              {QUICK_ACTIONS.map((a) => (
+                <button
+                  key={a.label}
+                  disabled={isLoading || noApp || !intakeComplete}
+                  onClick={() => {
+                    setInput(a.prompt);
+                    inputRef.current?.focus();
+                    setQuickActionsExpanded(false);
+                  }}
+                  className="text-[11px] text-left px-2.5 py-1.5 bg-white rounded-md border border-gray-200 text-gray-600 hover:border-gm-cyan-soft hover:bg-gm-cyan-soft hover:text-gm-navy transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {a.label}
+                </button>
+              ))}
+            </div>
+            {!intakeComplete && !noApp && (
+              <button
+                onClick={() => setShowIntake(true)}
+                className="mt-2 w-full text-[10px] text-gm-navy hover:underline text-center"
+              >
+                Add project context first →
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -387,7 +437,13 @@ export function InlineChatPanel({
           </div>
         ) : (
           <>
-            {messages.map((msg) => (
+            {messages.map((msg) => {
+              const { prose, refLines } = msg.role === 'assistant'
+                ? parseMessageContent(msg.content)
+                : { prose: msg.content, refLines: [] };
+              const refExpanded = draftStates[msg.id]?.refExpanded ?? false;
+
+              return (
               <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className="relative max-w-[90%] group">
                   <div
@@ -397,22 +453,100 @@ export function InlineChatPanel({
                         : 'bg-gray-100 text-gray-900'
                     }`}
                   >
-                    <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                    <p className="whitespace-pre-wrap leading-relaxed">{prose}</p>
                     <span className={`text-[10px] mt-1 block ${msg.role === 'user' ? 'text-cyan-100' : 'text-gray-400'}`}>
                       {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
 
+                  {/* References disclosure — assistant messages with citations */}
+                  {refLines.length > 0 && (() => {
+                    const resolution = citationResolutions[msg.id];
+                    const isResolving = resolution?.status === 'resolving';
+                    const isResolved = resolution?.status === 'resolved';
+                    return (
+                      <div className="mt-1 rounded-lg border border-gray-200 bg-white overflow-hidden text-xs">
+                        <button
+                          onClick={() =>
+                            setDraftStates((prev) => ({
+                              ...prev,
+                              [msg.id]: { ...prev[msg.id], open: prev[msg.id]?.open ?? false, saving: prev[msg.id]?.saving ?? false, saved: prev[msg.id]?.saved ?? false, refExpanded: !refExpanded },
+                            }))
+                          }
+                          className="w-full flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] text-gray-500 hover:bg-gray-50 transition-colors"
+                        >
+                          <BookOpen className="w-3 h-3 text-gm-navy flex-shrink-0" />
+                          <span className="font-medium text-gm-navy">{refLines.length} citation{refLines.length !== 1 ? 's' : ''}</span>
+                          {isResolving ? (
+                            <span className="flex items-center gap-1 text-gray-400 ml-0.5">
+                              <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                              Verifying via PubMed…
+                            </span>
+                          ) : isResolved ? (
+                            <span className="text-green-600 ml-0.5 font-medium">· verified</span>
+                          ) : (
+                            <span className="text-gray-400 ml-0.5">— will be verified on save</span>
+                          )}
+                          {refExpanded
+                            ? <ChevronUp className="w-3 h-3 ml-auto" />
+                            : <ChevronDown className="w-3 h-3 ml-auto" />}
+                        </button>
+                        {refExpanded && (
+                          <div className="px-2.5 pb-2 border-t border-gray-100 pt-2">
+                            {isResolving ? (
+                              <p className="text-[10px] text-gray-400 italic flex items-center gap-1">
+                                <Loader2 className="w-2.5 h-2.5 animate-spin" /> Resolving citations via PubMed…
+                              </p>
+                            ) : isResolved && resolution.refs ? (
+                              <ol className="space-y-1.5">
+                                {resolution.refs.map((ref) => (
+                                  <li key={ref.number} className="flex gap-2 text-[10px] leading-relaxed">
+                                    <span className="flex-shrink-0 font-medium text-gray-400 w-5 text-right">[{ref.number}]</span>
+                                    <span className={ref.unverified ? 'text-amber-700' : 'text-gray-700'}>
+                                      {ref.nlmFormatted}
+                                      {ref.pmid && !ref.unverified && (
+                                        <a
+                                          href={`https://pubmed.ncbi.nlm.nih.gov/${ref.pmid}/`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="ml-1.5 inline-flex items-center gap-0.5 text-[9px] font-medium text-gm-navy hover:underline"
+                                        >
+                                          PubMed <ExternalLink className="w-2 h-2" />
+                                        </a>
+                                      )}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ol>
+                            ) : (
+                              <div className="space-y-1">
+                                {refLines.map((line, i) => (
+                                  <p key={i} className="text-[10px] text-gray-500 leading-relaxed font-mono">{line}</p>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {/* Add to Draft button — assistant messages only */}
-                  {msg.role === 'assistant' && !msg.content.startsWith('⚠️') && applicationId && (
+                  {msg.role === 'assistant' && !prose.startsWith('⚠️') && applicationId && (
                     <div className="mt-1.5 relative">
                       {draftStates[msg.id]?.saved ? (
-                        <span className="flex items-center gap-1 text-[10px] text-green-600 font-medium">
+                        <span className="flex items-center gap-1 text-[10px] text-green-600 font-medium flex-wrap">
                           <Check className="w-3 h-3" /> Saved to draft
+                          {(draftStates[msg.id]?.citationsTotal ?? 0) > 0 && (
+                            <span className="text-gray-400 font-normal">
+                              · {draftStates[msg.id]?.citationsVerified}/{draftStates[msg.id]?.citationsTotal} citations verified
+                            </span>
+                          )}
                         </span>
                       ) : draftStates[msg.id]?.saving ? (
                         <span className="flex items-center gap-1 text-[10px] text-gray-400">
-                          <Loader2 className="w-3 h-3 animate-spin" /> Saving…
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          {refLines.length > 0 && citationResolutions[msg.id]?.status !== 'resolved' ? 'Resolving citations…' : 'Saving…'}
                         </span>
                       ) : (
                         <>
@@ -452,7 +586,8 @@ export function InlineChatPanel({
                   )}
                 </div>
               </div>
-            ))}
+            );
+          })}
 
             {isLoading && (
               <div className="flex justify-start">
@@ -468,6 +603,108 @@ export function InlineChatPanel({
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Project Context Dialog */}
+      {contextDialogOpen && (() => {
+        const intake = (
+          application?.project_context && Object.keys(application.project_context).length > 0
+            ? application.project_context
+            : application?.metadata?.intake
+        ) as (IntakeData & { _step?: number }) | undefined;
+        if (!intake) return null;
+        const isFromProject = !!(application?.project_context && Object.keys(application.project_context).length > 0);
+        return (
+          <div
+            className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+            onClick={() => setContextDialogOpen(false)}
+          >
+            <div
+              className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Dialog header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-none">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-gray-900">Project Context</span>
+                  {isFromProject ? (
+                    <span className="text-[9px] bg-gm-cyan-soft text-gm-navy px-1.5 py-0.5 rounded-full font-medium">From Project</span>
+                  ) : (
+                    <span className="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">Saved</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {!isFromProject && (
+                    <button
+                      onClick={() => { setContextDialogOpen(false); setShowEditModal(true); }}
+                      className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gm-navy transition-colors"
+                    >
+                      <PenLine className="w-3 h-3" />
+                      Edit
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setContextDialogOpen(false)}
+                    className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              {/* Dialog body */}
+              <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 text-sm">
+                {intake.projectName && (
+                  <div>
+                    <p className="text-[9px] uppercase tracking-wider font-semibold text-gray-400 mb-0.5">Project</p>
+                    <p className="text-gray-800 font-medium">{intake.projectName}</p>
+                  </div>
+                )}
+                {intake.oneLiner && (
+                  <div>
+                    <p className="text-[9px] uppercase tracking-wider font-semibold text-gray-400 mb-0.5">One-liner</p>
+                    <p className="text-gray-700 leading-relaxed">{intake.oneLiner}</p>
+                  </div>
+                )}
+                {intake.clinicalProblem && (
+                  <div>
+                    <p className="text-[9px] uppercase tracking-wider font-semibold text-gray-400 mb-0.5">Clinical Problem</p>
+                    <p className="text-gray-700 leading-relaxed">{intake.clinicalProblem}</p>
+                  </div>
+                )}
+                {intake.targetUsers && (
+                  <div>
+                    <p className="text-[9px] uppercase tracking-wider font-semibold text-gray-400 mb-0.5">Target Users</p>
+                    <p className="text-gray-700 leading-relaxed">{intake.targetUsers}</p>
+                  </div>
+                )}
+                {intake.coreTechnology && (
+                  <div>
+                    <p className="text-[9px] uppercase tracking-wider font-semibold text-gray-400 mb-0.5">Core Technology</p>
+                    <p className="text-gray-700 leading-relaxed">{intake.coreTechnology}</p>
+                  </div>
+                )}
+                {intake.differentiation && (
+                  <div>
+                    <p className="text-[9px] uppercase tracking-wider font-semibold text-gray-400 mb-0.5">Differentiation</p>
+                    <p className="text-gray-700 leading-relaxed">{intake.differentiation}</p>
+                  </div>
+                )}
+                {intake.fundingMechanism && (
+                  <div>
+                    <p className="text-[9px] uppercase tracking-wider font-semibold text-gray-400 mb-0.5">Funding Mechanism</p>
+                    <p className="text-gray-700">{intake.fundingMechanism}</p>
+                  </div>
+                )}
+                {intake.developmentStage && (
+                  <div>
+                    <p className="text-[9px] uppercase tracking-wider font-semibold text-gray-400 mb-0.5">Stage</p>
+                    <p className="text-gray-700">{intake.developmentStage}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Edit Context Modal */}
       {showEditModal && (

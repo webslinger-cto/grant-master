@@ -33,6 +33,7 @@ interface Props {
   initialData: Partial<IntakeData>;
   onSave: (data: IntakeData) => Promise<void>;
   onClose: () => void;
+  title?: string;
 }
 
 function Label({ children }: { children: React.ReactNode }) {
@@ -43,7 +44,7 @@ function Label({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function IntakeEditModal({ initialData, onSave, onClose }: Props) {
+export function IntakeEditModal({ initialData, onSave, onClose, title }: Props) {
   const [data, setData] = useState<Partial<IntakeData>>(initialData ?? {});
   const [saving, setSaving] = useState(false);
 
@@ -86,7 +87,7 @@ export function IntakeEditModal({ initialData, onSave, onClose }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-none">
           <div>
-            <h2 className="text-sm font-semibold text-gray-900">Edit Project Context</h2>
+            <h2 className="text-sm font-semibold text-gray-900">{title ?? 'Edit Project Context'}</h2>
             <p className="text-[11px] text-gray-400 mt-0.5">
               This information shapes every AI-generated section. Update any field and save.
             </p>

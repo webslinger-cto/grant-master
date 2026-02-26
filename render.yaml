@@ -11,14 +11,53 @@ services:
         value: production
       - key: PORT
         value: 3001
+
+      # Database — set in Render dashboard
       - key: DATABASE_URL
-        sync: false  # Set this in Render dashboard with your Supabase URL
+        sync: false
+
+      # Auth
       - key: JWT_SECRET
         generateValue: true
+      - key: JWT_EXPIRATION
+        value: 7d
+      - key: REFRESH_TOKEN_SECRET
+        generateValue: true
+      - key: REFRESH_TOKEN_EXPIRATION
+        value: 7d
+
+      # Google OAuth (set in Render dashboard)
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
+      - key: GOOGLE_CALLBACK_URL
+        value: https://grantops-backend.onrender.com/api/v1/auth/google/callback
+
+      # URLs
       - key: FRONTEND_URL
-        sync: false  # Will be your Netlify URL
+        sync: false   # your Netlify URL, e.g. https://grantsmaster.netlify.app
+      - key: BACKEND_URL
+        value: https://grantops-backend.onrender.com
+
+      # Anthropic AI (set in Render dashboard)
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: AI_DEFAULT_MODEL
+        value: claude-sonnet-4-6
+      - key: AI_DEFAULT_TEMPERATURE
+        value: "0.7"
+      - key: AI_MAX_TOKENS_PER_REQUEST
+        value: "4000"
+      - key: AI_MAX_MESSAGES_PER_USER_PER_DAY
+        value: "100"
+      - key: AI_STREAM_RESPONSES
+        value: "true"
+
+      # Google Drive export (set in Render dashboard)
+      - key: GOOGLE_SERVICE_ACCOUNT_EMAIL
+        sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY
+        sync: false
+
     healthCheckPath: /api/v1/auth/google
